@@ -64,11 +64,15 @@ export def median []: list<duration> -> duration {
 }
 
 # Builds `dir` with its config `runs` times and returns the median time.
-def time-build [lsdocs: path, dir: path, runs: int]: nothing -> duration {
+# Without `cache`, builds bypass the build cache; with it, one untimed
+# build fills the cache first, so the timed ones are fully cached.
+def time-build [lsdocs: path, dir: path, runs: int, cache: bool]: nothing -> duration {
     let config = $dir | path join lsdocs.toml
+    let flags = if $cache { [] } else { [--no-cache] }
+    if $cache { ^$lsdocs build --config $config | complete | ignore }
     1..$runs | each {
         timeit {
-            let result = ^$lsdocs build --config $config | complete
+            let result = ^$lsdocs build --config $config ...$flags | complete
             if $result.exit_code != 0 {
                 error make {msg: $"build of ($dir) failed:\n($result.stderr)"}
             }
@@ -80,26 +84,30 @@ def time-build [lsdocs: path, dir: path, runs: int]: nothing -> duration {
 export def cases [lsdocs: path, --pages: int = 200, --runs: int = 3]: nothing -> table {
     let root = mktemp --directory
     let cases = [
-        # Transport cost on a typical site.
-        [transport pages sections];
-        [builtin $pages 5]
-        [stdio $pages 5]
-        [pipe $pages 5]
+        # Transport cost on a typical site, then the same with every parse
+        # and render result cached.
+        [transport pages sections cache];
+        [builtin $pages 5 false]
+        [stdio $pages 5 false]
+        [pipe $pages 5 false]
+        [builtin $pages 5 true]
+        [stdio $pages 5 true]
         # Tree size: fewer, bigger pages.
-        [builtin 20 50]
-        [stdio 20 50]
-        [builtin 20 200]
-        [stdio 20 200]
+        [builtin 20 50 false]
+        [stdio 20 50 false]
+        [builtin 20 200 false]
+        [stdio 20 200 false]
     ]
     let results = $cases | enumerate | each {|case|
         let c = $case.item
         let dir = $root | path join $"case($case.index)"
         generate $dir $c.pages $c.sections
         config $lsdocs $c.transport | save ($dir | path join lsdocs.toml)
-        let time = time-build $lsdocs $dir $runs
+        let time = time-build $lsdocs $dir $runs $c.cache
         let docs = $c.pages + 1
         {
             transport: $c.transport
+            cached: $c.cache
             pages: $docs
             sections: $c.sections
             median: $time
