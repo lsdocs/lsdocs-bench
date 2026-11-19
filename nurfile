@@ -1,91 +1,34 @@
 # Dev tasks for lsdocs-bench (run with `nur`; `nur --list` shows them).
-# The tasks shared by every lsdocs repository come first; this
-# repository's own follow.
 
 use scripts/org.nu
 
-# The organization's repositories and their crates (for `check-git-deps`
-# and `link`).
-def org-map []: nothing -> record { open scripts/org.nuon }
-
-# Runs cargo with `org-env` (local clones when LSDOCS_ORG_DIR is set).
-# PYO3_BUILD_EXTENSION_MODULE builds pyo3 crates as extension modules (no
-# libpython link), as maturin does, so plain cargo builds of them work.
-def --wrapped cargo-org [...args] {
-    with-env ((org org-env) | insert PYO3_BUILD_EXTENSION_MODULE "1") { ^cargo ...$args }
-}
-
-# Format the Rust code (`--check` only checks).
-def "nur fmt" [--check] {
-    if $check { cargo fmt --all -- --check } else { cargo fmt --all }
-}
-
-# Clippy, warnings as errors.
-def "nur lint" [] {
-    cargo-org clippy --workspace --all-targets -- -D warnings
-}
-
-# The Rust tests.
-def "nur test" [] {
-    cargo-org test --workspace
-}
-
-# Fails if a crate of the organization is built twice (two sources, or a
-# `[patch]` applied on one side only).
-def "nur check-dupes" [] {
-    let found = org dupes (cargo-org tree --workspace --duplicates -e normal,build,dev | complete | get stdout)
-    if ($found | is-not-empty) {
-        error make --unspanned {msg: $"built twice: ($found | str join ', ')"}
+# The `lsdocs` binary to time: LSDOCS_BIN if set, else lsdocs (release,
+# default features) installed from git into target/lsdocs-bin. With
+# LSDOCS_ORG_DIR set, from the local clones there.
+def lsdocs-bin []: nothing -> string {
+    let given = $env | get -o LSDOCS_BIN
+    if $given != null and $given != "" { return $given }
+    let root = $env.PWD | path join target lsdocs-bin
+    with-env (org org-env) {
+        cargo install --quiet --git $"($org.ORG_URL)/lsdocs" --root $root lsdocs
     }
-    print "check-dupes: OK"
+    $root | path join bin (if $nu.os-info.name == "windows" { "lsdocs.exe" } else { "lsdocs" })
 }
 
-# Fails unless every lsdocs dependency is a path inside this repository or
-# a git dependency on the organization repository holding it.
-def "nur check-git-deps" [] {
-    let manifests = glob "{Cargo.toml,crates/*/Cargo.toml,bindings/*/Cargo.toml,tools/*/Cargo.toml}"
-    let errors = $manifests | each {|m| org check-git-deps (open $m) (org-map) | each {|e| $"($m): ($e)" } } | flatten
-    if ($errors | is-not-empty) {
-        for e in $errors { print -e $"error: ($e)" }
-        error make --unspanned {msg: "check-git-deps failed"}
-    }
-    print $"check-git-deps: ($manifests | length) manifest\(s\) OK"
+# Time release builds of a generated site: in-process, over stdio and over
+# a pipe, cached and not, and with big pages.
+def "nur bench" [--pages: int = 200, --runs: int = 3] {
+    use scripts/bench.nu
+    bench cases (lsdocs-bin) --pages $pages --runs $runs
 }
 
-# Builds against a local checkout of an organization repository (live
-# edits, committed or not): writes `[patch]` entries into the untracked
-# .cargo/config.toml. `nur unlink` undoes it.
-def "nur link" [path: string] {
-    let name = $path | path expand | path basename
-    let crates = org-map | get -o $name
-    if $crates == null { error make --unspanned {msg: $"`($name)` is not a repository of the organization"} }
-    mkdir .cargo
-    let file = ".cargo/config.toml"
-    let config = if ($file | path exists) { open $file } else { {} }
-    let patch = $config | get -o patch | default {} | upsert $"($org.ORG_URL)/($name)" (org patch-entries $path $crates)
-    $config | upsert patch $patch | to toml | save -f $file
-    print $"linked ($name) -> ($path | path expand)"
-}
-
-# Removes `nur link`'s entries (all, or one repository's).
-def "nur unlink" [name?: string] {
-    let file = ".cargo/config.toml"
-    if not ($file | path exists) { return }
-    let config = open $file
-    let patch = if $name == null { {} } else { $config | get -o patch | default {} | reject -o $"($org.ORG_URL)/($name)" }
-    $config | upsert patch $patch | to toml | save -f $file
-}
-
-# Updates the lockfile's revision of organization crates (all, or one).
-def "nur bump" [crate?: string] {
-    if $crate == null { cargo-org update } else { cargo-org update -p $crate }
+# The tests of the nu scripts.
+def "nur test scripts" [] {
+    use scripts/tests/bench.nu
+    bench
 }
 
 # What CI runs.
 def "nur ci" [] {
-    nur fmt --check
-    nur lint
-    nur test
-    nur check-dupes
-    nur check-git-deps
+    nur test scripts
 }

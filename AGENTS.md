@@ -43,3 +43,8 @@ shows them. `nur ci` runs what CI runs: run it before committing. Tools:
 - Licensing: `Apache-2.0 OR MIT`. Nothing is published.
 - Record what is left open in README.md's TODO section, and what the code
   does not do (or does differently) under Known limitations.
+
+## This repository
+
+No Rust code: `scripts/bench.nu` (the benchmark, tested by
+`scripts/tests/bench.nu`) and the nurfile. `nur ci` runs the script tests.
