@@ -10,6 +10,6 @@ permissions: {}
 
 jobs:
   ci:
-    uses: lsdocs/.github/.github/workflows/ci.yml@setup-reusable-ci
+    uses: lsdocs/.github/.github/workflows/ci.yml@main
     permissions:
       contents: read
