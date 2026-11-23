@@ -1,6 +1,7 @@
 # Dev tasks for lsdocs-bench (run with `nur`; `nur --list` shows them).
 
 use scripts/org.nu
+use scripts/org.nu run-cmd
 
 # The `lsdocs` binary to time: LSDOCS_BIN if set, else lsdocs (release,
 # default features) installed from git into target/lsdocs-bin. With
@@ -10,7 +11,7 @@ def lsdocs-bin []: nothing -> string {
     if $given != null and $given != "" { return $given }
     let root = $env.PWD | path join target lsdocs-bin
     with-env (org org-env) {
-        cargo install --quiet --git $"($org.ORG_URL)/lsdocs" --root $root lsdocs
+        run-cmd cargo install --quiet --git $"($org.ORG_URL)/lsdocs" --root $root lsdocs
     }
     $root | path join bin (if $nu.os-info.name == "windows" { "lsdocs.exe" } else { "lsdocs" })
 }
