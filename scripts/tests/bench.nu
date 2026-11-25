@@ -23,7 +23,7 @@ def "test config launches plugins as asked" [] {
     let builtin = config "/bin/lsdocs" builtin | from toml
     assert equal ($builtin.plugins | get builtin) ($PLUGINS | get builtin)
     let stdio = config 'C:\lsdocs.exe' stdio | from toml
-    assert equal ($stdio.plugins | get 0 | get command) ['C:\lsdocs.exe' plugin parser-markdown]
+    assert equal ($stdio.plugins | get 0 | get command) ['C:\lsdocs.exe' plugin parser-myst]
     assert equal ($stdio.plugins | get 0 | get transport) stdio
 }
 

@@ -8,7 +8,7 @@
 # The first-party plugins every benchmark site uses, in config order.
 export const PLUGINS = [
     [name builtin];
-    [markdown parser-markdown]
+    [markdown parser-myst]
     [toc transform-toc]
     [links transform-links]
     [nav transform-nav]
